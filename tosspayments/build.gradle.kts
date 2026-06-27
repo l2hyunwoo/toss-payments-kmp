@@ -20,6 +20,11 @@ kotlin {
         compileSdk = libs.versions.android.compileSdk.get().toInt()
         minSdk = libs.versions.android.minSdk.get().toInt()
 
+        // 새 com.android.kotlin.multiplatform.library 플러그인은 기본적으로 Android 리소스 처리를
+        // 끄고 있어, compose-resources(toss_widget.html)가 APK에 들어가지 않는다(JetBrains CMP-9547).
+        // 이 한 줄이 Android 리소스 파이프라인을 켜 assets 병합에 연결한다.
+        androidResources.enable = true
+
         @OptIn(ExperimentalKotlinGradlePluginApi::class)
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)
