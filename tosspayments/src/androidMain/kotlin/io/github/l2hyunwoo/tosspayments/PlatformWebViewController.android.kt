@@ -11,6 +11,10 @@ import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.webkit.JavaScriptReplyProxy
+import androidx.webkit.WebMessageCompat
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -74,7 +78,7 @@ internal actual class PlatformWebViewController actual constructor(
             javaScriptCanOpenWindowsAutomatically = true
             setSupportMultipleWindows(true) // 3DS 팝업을 위해 onCreateWindow를 활성화한다
         }
-        wv.addJavascriptInterface(JsBridge(), Bridge.NATIVE_CHANNEL)
+        attachBridge(wv)
         wv.webViewClient = TossWebViewClient()
         wv.webChromeClient = TossWebChromeClient()
 
@@ -91,8 +95,36 @@ internal actual class PlatformWebViewController actual constructor(
         scope.launch { onMessage?.invoke(json) }
     }
 
-    /** window.tossNative.postMessage(json) → 여기로 온다. */
-    private inner class JsBridge {
+    /**
+     * JS→Kotlin 브리지를 sentinel origin([Bridge.BASE_URL])에만 노출한다. 이게 핵심 보안 장치다:
+     * 결제 도중 WebView에는 원격 PG/3DS/은행 페이지가 같은 WebView에 로드되는데, 전역
+     * @JavascriptInterface는 그 모든 페이지에서 `window.tossNative`에 도달해 위조 paymentSuccess를
+     * 주입할 수 있다. WebMessageListener는 onPostMessage의 sourceOrigin을 allowlist로 막아 우리
+     * host 페이지에서 온 메시지만 신뢰한다.
+     *
+     * WEB_MESSAGE_LISTENER 미지원(구형 WebView APK) 시 @JavascriptInterface로 폴백한다 — origin
+     * 제한이 없으므로 그 경우 인-프로세스 결과를 더더욱 신뢰하면 안 되고, 서버 confirm이 유일한 권위다.
+     */
+    @SuppressLint("RequiresFeature")
+    private fun attachBridge(wv: WebView) {
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
+            WebViewCompat.addWebMessageListener(
+                wv,
+                Bridge.NATIVE_CHANNEL,
+                setOf(Bridge.ORIGIN), // only the sentinel origin may use the bridge
+            ) { _: WebView, message: WebMessageCompat, sourceOrigin: Uri, isMainFrame: Boolean, _: JavaScriptReplyProxy ->
+                // Defense in depth: the allowlist already enforces origin, but re-check.
+                if (isMainFrame && "${sourceOrigin.scheme}://${sourceOrigin.host}" == Bridge.ORIGIN) {
+                    message.data?.let(::deliver)
+                }
+            }
+        } else {
+            wv.addJavascriptInterface(LegacyJsBridge(), Bridge.NATIVE_CHANNEL)
+        }
+    }
+
+    /** Fallback bridge for WebView versions without WEB_MESSAGE_LISTENER (no origin restriction). */
+    private inner class LegacyJsBridge {
         @JavascriptInterface
         fun postMessage(json: String) = deliver(json)
     }
@@ -139,6 +171,15 @@ internal actual class PlatformWebViewController actual constructor(
 
     private fun launchIntentScheme(context: Context, url: String) {
         val intent = runCatching { Intent.parseUri(url, Intent.URI_INTENT_SCHEME) }.getOrNull() ?: return
+        // intent-redirection(confused deputy) 방어: 웹이 제어하는 intent:// 문자열은 명시적 component·
+        // selector·임의 flag를 품을 수 있어, 그대로 startActivity하면 호스트 앱 권한으로 비공개 컴포넌트를
+        // 띄울 수 있다. 외부 앱 전환에 필요한 것만 남긴다 — component/selector 제거, BROWSABLE 강제,
+        // 위험 flag(GRANT_URI*) 제거.
+        intent.component = null
+        intent.selector = null
+        intent.addCategory(Intent.CATEGORY_BROWSABLE)
+        intent.flags = intent.flags and
+            (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION).inv()
         try {
             context.startActivity(intent)
         } catch (_: ActivityNotFoundException) {
@@ -152,7 +193,9 @@ internal actual class PlatformWebViewController actual constructor(
     }
 
     private fun launchAppScheme(context: Context, url: String) {
-        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+        // 커스텀 스킴도 ACTION_VIEW + BROWSABLE로만 띄운다(특정 컴포넌트 지정 불가, 표준 앱 전환과 동일).
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).addCategory(Intent.CATEGORY_BROWSABLE)
+        runCatching { context.startActivity(intent) }
     }
 
     /**

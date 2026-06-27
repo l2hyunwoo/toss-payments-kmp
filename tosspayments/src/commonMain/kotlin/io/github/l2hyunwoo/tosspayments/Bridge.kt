@@ -38,6 +38,18 @@ internal object Bridge {
     const val BASE_URL: String = "https://tosspayments.local/"
 
     /**
+     * [BASE_URL]의 origin(scheme://host, 끝 슬래시 없음). JS→Kotlin 브리지를 이 origin에서 온
+     * 메시지로만 제한하는 데 쓴다(Android WebMessageListener allowlist / iOS frameInfo 검증).
+     */
+    const val ORIGIN: String = "https://tosspayments.local"
+
+    /** [ORIGIN]의 scheme. iOS securityOrigin 검증용. */
+    const val ORIGIN_SCHEME: String = "https"
+
+    /** [ORIGIN]의 host. iOS securityOrigin 검증용. */
+    const val ORIGIN_HOST: String = "tosspayments.local"
+
+    /**
      * requestPayment는 성공 시 여기로 redirect된다 (mobile에서는 Promise 경로를 쓸 수 없다).
      * native host는 로드를 취소하고 query에서 paymentKey/orderId/amount를 파싱한다.
      */

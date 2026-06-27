@@ -17,6 +17,11 @@ activity-compose = "1.13.0"
 # --- Compose-MP-aligned multiplatform AndroidX (commonMain) ---
 jb-lifecycle = "2.10.0"
 
+# --- Android-only ---
+# androidx.webkit: origin-restricted JS bridge (WebViewCompat.addWebMessageListener),
+# so the native bridge is reachable only from the sentinel origin, not from remote PG/3DS pages.
+androidx-webkit = "1.14.0"
+
 # --- KotlinX ---
 coroutines = "1.11.0"
 serialization = "1.11.0"
@@ -25,6 +30,9 @@ serialization = "1.11.0"
 # KotlinX
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
+
+# Android WebView origin-restricted messaging
+androidx-webkit = { module = "androidx.webkit:webkit", version.ref = "androidx-webkit" }
 
 # ViewModel + lifecycle-aware state in commonMain (Compose-MP ships its own org.jetbrains.androidx.lifecycle)
 jb-lifecycle-viewmodel-compose = { module = "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "jb-lifecycle" }

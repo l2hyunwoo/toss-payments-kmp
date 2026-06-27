@@ -122,7 +122,14 @@ internal actual class PlatformWebViewController actual constructor(
             userContentController: WKUserContentController,
             didReceiveScriptMessage: WKScriptMessage,
         ) {
-            (didReceiveScriptMessage.body as? String)?.let(onJson)
+            // sentinel origin의 main frame에서 온 메시지만 신뢰한다. 결제 도중 원격 PG/3DS 페이지가
+            // 같은 WebView에 로드되며, origin 검증이 없으면 그 페이지가 위조 paymentSuccess를 post할 수
+            // 있다. WKWebView의 handler는 모든 frame에 걸리므로 frameInfo로 직접 막는다.
+            val origin = didReceiveScriptMessage.frameInfo.securityOrigin
+            val trusted = didReceiveScriptMessage.frameInfo.isMainFrame() &&
+                origin.protocol == Bridge.ORIGIN_SCHEME &&
+                origin.host == Bridge.ORIGIN_HOST
+            if (trusted) (didReceiveScriptMessage.body as? String)?.let(onJson)
         }
     }
 
