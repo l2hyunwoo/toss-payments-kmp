@@ -37,6 +37,15 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      # Pin Xcode to a version whose iOS Simulator SDK is new enough for Compose
+      # Multiplatform 1.11's skiko (it links against iOS-simulator 18.x; the macOS runner
+      # DEFAULTS to Xcode 16.4 / SDK 14, which lacks the UIUtilities SubFramework and fails
+      # linkDebugTestIosSimulatorArm64). 26.2 matches the local dev toolchain.
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
+        with:
+          xcode-version: '26.2'
+
       # setup-gradle provides Gradle dependency/build caching keyed on the build
       # files (cache, not artifacts: ~/.gradle is regenerable input). It also
       # validates the gradle-wrapper.jar checksum on every run.
