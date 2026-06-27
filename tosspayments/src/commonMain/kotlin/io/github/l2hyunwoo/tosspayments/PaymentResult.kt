@@ -3,13 +3,22 @@ package io.github.l2hyunwoo.tosspayments
 /**
  * [TossPaymentWidget.requestPayment]의 결과.
  *
- * 중요: [Success]는 결제가 완료되었다는 증거가 아니다. JS SDK가 paymentKey를
- * 만들어냈다는 의미일 뿐이다. 가맹점 서버는 주문을 처리하기 전에 반드시
- * paymentKey + orderId + amount로 TossPayments `/v1/payments/confirm` API를
- * 호출해야 한다. in-process 결과는 어떤 연동 방식에서든 참고용일 뿐이다.
+ * 결제 라이브러리에서 가장 중요한 보안 불변식: 클라이언트가 받는 "성공"은 절대 최종이 아니다.
+ * 결과는 WebView가 sentinel URL로 redirect한 query에서 읽으므로 WebView 안의 스크립트가 위조할 수
+ * 있다. 진짜 권위는 가맹점 서버의 `/v1/payments/confirm` 호출뿐이다. 그래서 성공 케이스 이름을
+ * [UnverifiedSuccess]로 두어 "아직 검증 안 됨"을 타입에 실었다 — 연동 개발자가 이걸 곧바로 "결제
+ * 완료"로 처리하지 못하게 한다.
  */
 sealed interface PaymentResult {
-    data class Success(
+    /**
+     * JS SDK가 paymentKey를 만들어냈다. **결제가 완료된 것이 아니다.**
+     *
+     * 반드시 가맹점 서버가 [paymentKey] + [orderId] + [amount]로 TossPayments
+     * `/v1/payments/confirm` API를 호출해 승인을 확정한 뒤에야 주문을 처리해야 한다. amount는
+     * 신뢰할 수 없는 redirect query에서 온 값이므로, 서버는 자신이 만든 주문 금액과 반드시 대조해야
+     * 한다(클라이언트 금액 위변조 방지).
+     */
+    data class UnverifiedSuccess(
         val paymentKey: String,
         val orderId: String,
         val amount: Long,

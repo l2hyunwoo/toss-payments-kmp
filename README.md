@@ -44,7 +44,7 @@ TossPaymentWidgetSurface(widget)
 Button(enabled = status == WidgetStatus.READY && agreed, onClick = {
     scope.launch {
         when (val r = widget.requestPayment(PaymentOrder("order-1", "티셔츠"))) {
-            is PaymentResult.Success -> // r.paymentKey + orderId + amount 를 가맹점 서버로 전송
+            is PaymentResult.UnverifiedSuccess -> // r.paymentKey + orderId + amount 를 가맹점 서버로 전송
             is PaymentResult.Failure -> // r.error 는 타입이 있는 TossPaymentError
         }
     }
@@ -68,7 +68,8 @@ Button(enabled = status == WidgetStatus.READY && agreed, onClick = {
 
 ## 서버 측 승인 (필수)
 
-`PaymentResult.Success`는 JS SDK가 `paymentKey`를 만들어냈다는 뜻일 뿐, **결제가 완료된 것이 아니다.**
+`PaymentResult.UnverifiedSuccess`는 JS SDK가 `paymentKey`를 만들어냈다는 뜻일 뿐, **결제가 완료된 것이 아니다.**
+(타입 이름이 `UnverifiedSuccess`인 이유 — 클라이언트가 받는 성공은 WebView 안에서 위조 가능하므로, 서버 confirm 전까지는 "미검증"이다.)
 가맹점 서버가 주문을 처리하기 전에 반드시 토스페이먼츠 `POST /v1/payments/confirm`을
 `paymentKey` + `orderId` + `amount`로 호출해야 한다. 인-프로세스 결과는 절대 최종 권위가 아니다.
 

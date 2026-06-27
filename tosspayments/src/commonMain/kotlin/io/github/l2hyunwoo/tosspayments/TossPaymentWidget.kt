@@ -87,7 +87,7 @@ class TossPaymentWidget internal constructor(
      * suspend한다. 위젯이 [WidgetStatus.READY]가 되기 전에 호출하면 throw하지 않고
      * [TossPaymentError.Configuration]으로 곧바로 실패한다 — SDK의 async render gate와 맞춘다.
      *
-     * NOTE: [PaymentResult.Success]는 확정된 결제가 아니다. 이행 전에 server-side에서
+     * NOTE: [PaymentResult.UnverifiedSuccess]는 확정된 결제가 아니다. 이행 전에 server-side에서
      * 확인하라(paymentKey + orderId + amount → /v1/payments/confirm).
      */
     suspend fun requestPayment(order: PaymentOrder): PaymentResult {
@@ -131,7 +131,7 @@ class TossPaymentWidget internal constructor(
                 SelectedPaymentMethod(it, p.method ?: it, p.easyPay)
             }
             GuestEvent.PAYMENT_SUCCESS -> resolvePending(
-                PaymentResult.Success(
+                PaymentResult.UnverifiedSuccess(
                     paymentKey = p?.paymentKey.orEmpty(),
                     orderId = p?.orderId.orEmpty(),
                     amount = p?.amount ?: 0L,

@@ -80,8 +80,8 @@ fun SampleScreen(modifier: Modifier = Modifier) {
                         PaymentOrder(orderId = "order-" + (1..9999).random(), orderName = "Demo order"),
                     )
                     resultText = when (result) {
-                        is PaymentResult.Success ->
-                            "Success: paymentKey=${result.paymentKey} (confirm on server)"
+                        is PaymentResult.UnverifiedSuccess ->
+                            "UnverifiedSuccess: paymentKey=${result.paymentKey} (서버에서 confirm 필요)"
                         is PaymentResult.Failure ->
                             "${result.error::class.simpleName}: ${result.error.code}"
                     }
