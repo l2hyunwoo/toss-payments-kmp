@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "io.tosspayments.kmp.sample.android"
+    namespace = "io.github.l2hyunwoo.tosspayments.sample.android"
     compileSdk = libs.versions.android.compileSdk.get().toInt()
 
     defaultConfig {
-        applicationId = "io.tosspayments.kmp.sample"
+        applicationId = "io.github.l2hyunwoo.tosspayments.sample"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = 1

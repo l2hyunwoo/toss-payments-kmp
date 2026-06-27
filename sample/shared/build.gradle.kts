@@ -10,7 +10,7 @@ plugins {
 
 kotlin {
     android {
-        namespace = "io.tosspayments.kmp.sample.shared"
+        namespace = "io.github.l2hyunwoo.tosspayments.sample.shared"
         compileSdk = libs.versions.android.compileSdk.get().toInt()
         minSdk = libs.versions.android.minSdk.get().toInt()
 

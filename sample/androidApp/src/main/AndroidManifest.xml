@@ -12,7 +12,7 @@
         tools:ignore="MissingApplicationIcon">
 
         <activity
-            android:name="io.tosspayments.kmp.sample.android.MainActivity"
+            android:name="io.github.l2hyunwoo.tosspayments.sample.android.MainActivity"
             android:exported="true"
             android:configChanges="orientation|screenSize|keyboardHidden">
             <intent-filter>

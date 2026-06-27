@@ -16,7 +16,7 @@ kotlin {
     }
 
     android {
-        namespace = "io.tosspayments.kmp"
+        namespace = "io.github.l2hyunwoo.tosspayments"
         compileSdk = libs.versions.android.compileSdk.get().toInt()
         minSdk = libs.versions.android.minSdk.get().toInt()
 
