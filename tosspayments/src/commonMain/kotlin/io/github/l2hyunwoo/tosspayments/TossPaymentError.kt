@@ -3,18 +3,15 @@ package io.github.l2hyunwoo.tosspayments
 /**
  * JS / Android / iOS SDK 전반을 아우르는 통합 에러 모델.
  *
- * 검증된 설계 제약(docs.tosspayments.com/sdk/v2/error-codes + 양쪽 SDK 레포):
- *  - 에러 CODE 문자열은 서버에서 내려온 값을 그대로 전달하며, 모든 플랫폼에서 동일하다.
- *    message가 아니라 code로 분기한다.
- *  - 같은 code라도 MESSAGE는 플랫폼별로 다르므로(iOS는 web과 다른 취소 메시지를 쓴다)
- *    참고용일 뿐이다.
- *  - 집합은 open이다: SDK는 임의/신규/플랫폼 내부 code를 그대로 흘려보낸다(예: iOS의
- *    내부 "102" WKWebView frame-load interruption). 매핑되지 않은 code는 exhaustive `when`을
- *    깨뜨리지 않고 [Unknown]으로 강등된다.
- *  - 두 취소 채널 — USER_CANCEL(promise)과 PAY_PROCESS_CANCELED(failUrl) — 은
- *    [UserCanceled]로 통합되어 호출자가 한 케이스만 검사하면 된다.
+ * 설계 제약:
+ *  - 분기는 message가 아니라 code로 한다. code는 서버 원문이라 플랫폼 공통이지만 message는
+ *    플랫폼별로 다르다(iOS는 web과 다른 취소 메시지).
+ *  - code 집합은 open이다: SDK는 임의/신규/플랫폼 내부 code(예: iOS "102" WKWebView
+ *    frame-load interruption)를 그대로 흘려보내며, 매핑 안 된 code는 [Unknown]으로 강등된다.
+ *  - 취소 채널 둘(USER_CANCEL/promise, PAY_PROCESS_CANCELED/failUrl)을 [UserCanceled]로
+ *    통합해 호출자가 한 케이스만 검사하게 한다.
  *
- * [code]는 variant가 [Unknown]일 때도 진단을 위해 항상 원문 그대로 보존된다.
+ * [code]는 [Unknown]일 때도 진단을 위해 원문 그대로 보존된다.
  */
 sealed class TossPaymentError(
     open val code: String,

@@ -1,19 +1,13 @@
 <!DOCTYPE html>
 <!--
   TossPayments v2 JS SDK 호스트 페이지 (self-hosted WebView 방식).
+  baseURL https://tosspayments.local/ 아래에서 로드되며, 로드 전 __TOSS_JS_SDK_URL__ 이 치환된다.
 
-  Native 플로우:
-    1. PlatformWebViewController가 이 HTML(문자열)을 baseURL https://tosspayments.local/ 아래에서 로드한다.
-       로드 전에 __TOSS_JS_SDK_URL__ 을 PaymentWidgetConfig.jsSdkUrl 로 치환한다.
-    2. 페이지 로드 후(onPageFinished / didFinishNavigation), native가 evaluate()로
-       window.__toss.init(...) 다음 window.__toss.renderPaymentMethods(...) 를 호출한다.
-    3. 페이지는 단일 채널로 이벤트를 되돌려 보낸다(iOS는 WKScriptMessageHandler "tossNative",
-       그 외 Android는 @JavascriptInterface "tossNative"). event/payload 이름은 Bridge.kt
-       (GuestEvent @SerialName + GuestPayload 필드)와 글자 그대로 일치한다.
-    4. requestPayment는 완료 시 sentinel successUrl/failUrl 로 REDIRECT 한다 — 모바일에서는 Promise가
-       paymentKey로 resolve 되지 않는다. native가 그 navigation을 가로채
-       paymentSuccess/paymentFail 을 합성한다. JS는 redirect 이전의 동기 검증 /
-       사용자 취소 오류에 대해서만 paymentFail 을 emit 한다.
+  event/payload 이름은 Bridge.kt(GuestEvent @SerialName + GuestPayload 필드)와 글자 그대로 일치해야 한다.
+
+  requestPayment는 완료 시 sentinel successUrl/failUrl 로 REDIRECT 한다 — 모바일에서는 Promise가
+  paymentKey로 resolve 되지 않는다. native가 그 navigation을 가로채 paymentSuccess/paymentFail 을 합성한다.
+  JS는 redirect 이전의 동기 검증 / 사용자 취소 오류에 대해서만 paymentFail 을 emit 한다.
 -->
 <html lang="ko">
 <head>
@@ -37,8 +31,7 @@
 
       var _widgets = null, _methodWidget = null, _agreementWidget = null, _ready = false;
 
-      // JS -> native. iOS는 window.webkit.messageHandlers.tossNative 를, Android는
-      // window.tossNative (@JavascriptInterface) 를 노출한다. 한 페이지가 두 호스트를 모두 지원한다.
+      // iOS(window.webkit.messageHandlers.tossNative)와 Android(@JavascriptInterface) 두 호스트를 한 페이지가 모두 지원한다.
       function post(event, payload) {
         var msg = JSON.stringify({ event: event, payload: payload || null });
         try {
@@ -67,7 +60,7 @@
 
       window.__toss = {
         init: function (args) {
-          var tp = TossPayments(args.clientKey); // /v2/standard 의 전역 factory, 동기
+          var tp = TossPayments(args.clientKey);
           if (args.brandPayRedirectUrl) {
             _widgets = tp.widgets({ customerKey: args.customerKey, brandpay: { redirectUrl: args.brandPayRedirectUrl } });
           } else {

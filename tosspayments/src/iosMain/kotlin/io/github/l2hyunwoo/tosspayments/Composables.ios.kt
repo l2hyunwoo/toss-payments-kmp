@@ -10,10 +10,9 @@ import androidx.compose.ui.viewinterop.UIKitView
 import kotlinx.cinterop.ExperimentalForeignApi
 
 /**
- * controller가 만들고 설정한 단일 iOS WKWebView를 새로운 [UIKitView] interop(CMP 1.11, UIView에 대해
- * generic)을 통해 Compose 트리에 노출한다. 이 WebView가 결제수단 선택기와 약관을 모두 렌더링한다.
+ * controller의 단일 WKWebView를 [UIKitView]로 노출한다 — 이 한 WebView가 결제수단 선택기와 약관을 모두 렌더링한다.
  *
- * NonCooperative interaction mode가 필요하다. 그렇지 않으면 Compose가 WebView의 scroll/tap 제스처를 먹어버린다.
+ * NonCooperative interaction mode 필수: 아니면 Compose가 WebView의 scroll/tap 제스처를 먹는다.
  */
 @OptIn(ExperimentalForeignApi::class, ExperimentalComposeUiApi::class)
 @Composable

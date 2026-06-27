@@ -5,10 +5,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * 브리지 origin 제한(Android WebMessageListener allowlist / iOS frameInfo 검증)의 정확성은
- * [Bridge.ORIGIN] / [Bridge.ORIGIN_SCHEME] / [Bridge.ORIGIN_HOST] 가 [Bridge.BASE_URL] 및
- * sentinel URL들과 정확히 일치하는 데 달려 있다. 어긋나면 정당한 host 페이지 메시지가 거부되거나
- * (기능 깨짐) 잘못된 origin이 허용된다(보안 구멍). 이 불변식을 고정한다.
+ * origin 제한(Android WebMessageListener allowlist / iOS frameInfo 검증)이 어긋나면 정당한 host
+ * 메시지가 거부되거나(기능 깨짐) 잘못된 origin이 허용된다(보안 구멍). 이 불변식을 고정한다.
  */
 class BridgeOriginTest {
 

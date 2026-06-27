@@ -24,10 +24,9 @@ value class CustomerKey(val value: String) {
 enum class Currency { KRW, AUD, EUR, GBP, HKD, JPY, SGD, USD }
 
 /**
- * 두 공식 SDK(그리고 JS SDK)에서 금액은 RENDER 시점에 바인딩되고, 이후
- * [TossPaymentWidget.updateAmount]로 변경된다. orderId/orderName은 requestPayment
- * 시점에만 들어온다 — [PaymentOrder] 참고. 두 단계를 분리한 것은 SDK 계약을 그대로 반영하며,
- * 어느 플랫폼에도 맞지 않는 API를 피하기 위함이다.
+ * 금액은 RENDER 시점에 바인딩되고 이후 [TossPaymentWidget.updateAmount]로 변경된다.
+ * orderId/orderName은 requestPayment 시점에만 들어온다 — [PaymentOrder] 참고.
+ * 두 단계 분리는 SDK 계약을 그대로 반영한 것.
  */
 data class PaymentAmount(
     val value: Long,

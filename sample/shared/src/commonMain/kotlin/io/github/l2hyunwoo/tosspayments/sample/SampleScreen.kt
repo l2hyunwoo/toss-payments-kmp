@@ -30,7 +30,6 @@ import io.github.l2hyunwoo.tosspayments.WidgetStatus
 import io.github.l2hyunwoo.tosspayments.rememberTossPaymentWidget
 import kotlinx.coroutines.launch
 
-/** 모든 플랫폼의 app shell이 공유하는 테마 적용된 진입점. */
 @Composable
 fun SampleApp(modifier: Modifier = Modifier) {
     MaterialTheme {
@@ -41,11 +40,8 @@ fun SampleApp(modifier: Modifier = Modifier) {
 }
 
 /**
- * 소비자용 API의 최소 데모. 공개된 TossPayments 테스트 client key를 사용한다.
- *
- * 흐름: 인라인 결제수단 + 약관 동의 widget을 렌더하고, 준비 완료와 필수 약관 동의 여부로
- * 결제 버튼을 gate한 뒤, requestPayment를 호출해 결과를 보여준다. 실제 앱에서는
- * Success 결과의 paymentKey/orderId/amount를 가맹점 서버에서 confirm해야 한다.
+ * 소비자용 API 최소 데모. 공개 테스트 client key 사용.
+ * Success 결과의 paymentKey/orderId/amount는 가맹점 서버에서 confirm해야 한다.
  */
 @Composable
 fun SampleScreen(modifier: Modifier = Modifier) {

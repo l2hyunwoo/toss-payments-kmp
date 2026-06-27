@@ -46,7 +46,7 @@ internal actual class PlatformWebViewController actual constructor(
         this.onStatus = onStatus
         this.onPageReady = onPageReady
         onStatus(WidgetStatus.LOADING)
-        // WebView 자체는 Context를 들고 있는 Compose host(attach)가 생성한다.
+        // WebView는 Context를 가진 Compose host(attach)가 생성한다.
     }
 
     actual fun evaluate(js: String) {
@@ -67,7 +67,7 @@ internal actual class PlatformWebViewController actual constructor(
         pageReadyFired = false
     }
 
-    /** WebView를 생성·설정하고 로딩을 시작한다. AndroidView factory에서 호출된다. */
+    /** AndroidView factory에서 호출된다. */
     @SuppressLint("SetJavaScriptEnabled")
     internal fun attach(context: Context): WebView {
         val wv = WebView(context)
@@ -199,14 +199,12 @@ internal actual class PlatformWebViewController actual constructor(
     }
 
     /**
-     * window.open()/target=_blank 팝업을 호스팅한다 (일부 3DS/간편결제 flow). WebKit은 팝업의
-     * target URL을 전달하려면 transport를 통해 실제 WebView를 요구한다; 첫 navigation을 캡처해
-     * main view로 라우팅한 뒤 누수되지 않도록 스스로 destroy하는 일회용 child를 사용한다
-     * (나머지 flow는 main view가 주도한다).
+     * window.open()/target=_blank 팝업(일부 3DS/간편결제 flow)을 호스팅한다. WebKit은 팝업의
+     * target URL을 transport로 받을 실제 WebView를 요구하므로, 첫 navigation만 main view로
+     * 라우팅하고 누수 방지를 위해 스스로 destroy하는 일회용 child를 넘긴다.
      */
     private inner class TossWebChromeClient : WebChromeClient() {
-        // 위젯 페이지의 JS console을 logcat("TossWidget" 태그)으로 흘려, JS 에러·SDK 경고를
-        // 네이티브에서 진단할 수 있게 한다(WebView 안은 평소 깜깜하다).
+        // WebView 안은 평소 깜깜하다 — JS console을 logcat으로 흘려 JS 에러·SDK 경고를 진단한다.
         override fun onConsoleMessage(consoleMessage: android.webkit.ConsoleMessage): Boolean {
             android.util.Log.d(
                 "TossWidget",
