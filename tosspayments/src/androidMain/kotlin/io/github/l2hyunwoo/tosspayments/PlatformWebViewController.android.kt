@@ -205,6 +205,16 @@ internal actual class PlatformWebViewController actual constructor(
      * (나머지 flow는 main view가 주도한다).
      */
     private inner class TossWebChromeClient : WebChromeClient() {
+        // 위젯 페이지의 JS console을 logcat("TossWidget" 태그)으로 흘려, JS 에러·SDK 경고를
+        // 네이티브에서 진단할 수 있게 한다(WebView 안은 평소 깜깜하다).
+        override fun onConsoleMessage(consoleMessage: android.webkit.ConsoleMessage): Boolean {
+            android.util.Log.d(
+                "TossWidget",
+                "[${consoleMessage.messageLevel()}] ${consoleMessage.message()} @${consoleMessage.sourceId()}:${consoleMessage.lineNumber()}",
+            )
+            return true
+        }
+
         @SuppressLint("SetJavaScriptEnabled")
         override fun onCreateWindow(
             view: WebView,
