@@ -25,8 +25,7 @@ import io.github.l2hyunwoo.tosspayments.PaymentAmount
 import io.github.l2hyunwoo.tosspayments.PaymentOrder
 import io.github.l2hyunwoo.tosspayments.PaymentResult
 import io.github.l2hyunwoo.tosspayments.PaymentWidgetConfig
-import io.github.l2hyunwoo.tosspayments.TossPaymentAgreement
-import io.github.l2hyunwoo.tosspayments.TossPaymentMethods
+import io.github.l2hyunwoo.tosspayments.TossPaymentWidgetSurface
 import io.github.l2hyunwoo.tosspayments.WidgetStatus
 import io.github.l2hyunwoo.tosspayments.rememberTossPaymentWidget
 import kotlinx.coroutines.launch
@@ -71,8 +70,7 @@ fun SampleScreen(modifier: Modifier = Modifier) {
         Text("toss-payments-kmp sample", style = MaterialTheme.typography.titleMedium)
         Text("status: $status", style = MaterialTheme.typography.bodySmall)
 
-        TossPaymentMethods(widget)
-        TossPaymentAgreement(widget)
+        TossPaymentWidgetSurface(widget)
 
         Button(
             enabled = status == WidgetStatus.READY && agreed,
