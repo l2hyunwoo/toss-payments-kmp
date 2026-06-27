@@ -85,3 +85,7 @@ iOS uses pure Kotlin/Native over WebKit — no Swift.
 
 Not yet done: verification on physical devices against live Korean bank apps (the redirect /
 app-scheme / 3DS-popup paths cannot be exercised on emulators or with test cards), and publishing.
+
+## License
+
+[MIT](LICENSE) © HyunWoo Lee
