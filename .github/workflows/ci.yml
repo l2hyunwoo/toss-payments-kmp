@@ -1,0 +1,90 @@
+name: CI
+
+# Trigger on pushes to main and on every pull request.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Least privilege: the build only needs to read the repo. No write scopes granted.
+# (cicd-security: GITHUB_TOKEN default to contents:read, elevate per-job only when needed.)
+permissions:
+  contents: read
+
+# Cancel a superseded run when a new commit lands on the same ref (PR or branch),
+# so an outdated build is not left running.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build & Test (KMP)
+    # macOS is required: iosArm64 / iosSimulatorArm64 targets and the
+    # iosSimulatorArm64Test run need Xcode; Android also builds fine on macOS.
+    runs-on: macos-latest
+    timeout-minutes: 60
+
+    steps:
+      # Third-party actions are pinned to a full commit SHA (immutable), not a
+      # floating tag, per cicd-security. Trailing comment records the human-readable version.
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520 # v5.4.0
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # setup-gradle provides Gradle dependency/build caching keyed on the build
+      # files (cache, not artifacts: ~/.gradle is regenerable input). It also
+      # validates the gradle-wrapper.jar checksum on every run.
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
+
+      # Explicit wrapper-jar validation step. setup-gradle already validates by
+      # default, but keeping this makes the supply-chain check visible and survives
+      # any future change to setup-gradle's default. Same repo SHA, subdir action.
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
+
+      # gradlew is committed +x; this is a harmless safety net for fresh checkouts.
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      # One invocation, cheap-to-expensive task order so failures surface early:
+      #  1. library compile across all 3 targets (androidMain + both iOS targets)
+      #  2. the 25 commonTest tests on the iOS simulator target
+      #  3. the demo app debug APK
+      # Android SDK is resolved from ANDROID_HOME on the runner (no local.properties
+      # is created on CI; it is gitignored). gradle.properties already sets -Xmx6144M
+      # to guard the 3-target OOM.
+      - name: Build library, run tests, assemble sample
+        run: |
+          ./gradlew \
+            :tosspayments:compileAndroidMain \
+            :tosspayments:compileKotlinIosArm64 \
+            :tosspayments:compileKotlinIosSimulatorArm64 \
+            :tosspayments:iosSimulatorArm64Test \
+            :sample:androidApp:assembleDebug \
+            --stacktrace
+
+      # Preserve test reports and the demo APK as build outputs (artifacts, not
+      # cache: results to keep after the run, regardless of pass/fail for reports).
+      - name: Upload test reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-reports
+          path: tosspayments/build/reports/tests/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Upload sample APK
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sample-debug-apk
+          path: sample/androidApp/build/outputs/apk/debug/*.apk
+          retention-days: 7
+          if-no-files-found: warn
