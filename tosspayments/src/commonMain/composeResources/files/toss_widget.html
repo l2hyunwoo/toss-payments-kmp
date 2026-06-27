@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<!--
+  Host page for the TossPayments v2 JS SDK (self-hosted WebView approach).
+
+  This is the analog of Toss's own bundled tosspayment_widget.html. The native
+  PlatformWebViewController loads this file, then drives it through window.__toss.*; the
+  page posts events back over window.tossNative (Android @JavascriptInterface /
+  iOS WKScriptMessageHandler).
+
+  STUB (milestone 2): the JS SDK script tag is injected by native using the pinned
+  config.jsSdkUrl, and the window.__toss functions below get their real implementations
+  (TossPayments(clientKey).widgets({customerKey}) → renderPaymentMethods / renderAgreement /
+  requestPayment / updateAmount), height reporting, and the readiness 'ready' event.
+-->
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <style>
+    html, body { margin: 0; padding: 0; }
+    #payment-method, #agreement { width: 100%; }
+  </style>
+</head>
+<body>
+  <div id="payment-method"></div>
+  <div id="agreement"></div>
+
+  <script>
+    // Minimal bridge stub. Native posts JSON-encoded GuestMessage objects back here.
+    function post(event, payload) {
+      var msg = JSON.stringify({ event: event, payload: payload || null });
+      if (window.tossNative && window.tossNative.postMessage) {
+        window.tossNative.postMessage(msg);              // Android & iOS (WKScriptMessageHandler)
+      }
+    }
+
+    // window.__toss is the Kotlin → JS command surface (see Bridge.HostCommand).
+    // These are placeholders; milestone 2 wires them to the real JS SDK.
+    window.__toss = {
+      init: function (args) { /* TossPayments(args.clientKey).widgets({ customerKey: args.customerKey }) */ },
+      renderPaymentMethods: function (args) { /* widgets.setAmount + renderPaymentMethods('#payment-method', ...) */ },
+      renderAgreement: function () { /* widgets.renderAgreement('#agreement') */ },
+      updateAmount: function (args) { /* widgets.setAmount({ value: args.value, currency, country }) */ },
+      requestPayment: function (args) { /* widgets.requestPayment({ orderId, orderName, ... }) → post('paymentSuccess'|'paymentFail', ...) */ },
+    };
+  </script>
+</body>
+</html>
