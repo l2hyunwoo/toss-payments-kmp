@@ -33,7 +33,7 @@ class RedirectParserTest {
 
     @Test
     fun percentEncodedMessage_isDecoded() {
-        // Korean message arrives percent-encoded; must round-trip to the original text.
+        // 한글 message는 percent-encoded로 도착하므로 원본 텍스트로 round-trip 되어야 한다.
         val url = "${Bridge.FAIL_URL}?code=PAY_PROCESS_CANCELED&message=%EC%B7%A8%EC%86%8C"
         val msg = RedirectParser.parse(url)!!
         assertEquals("취소", msg.payload?.message)
@@ -54,7 +54,7 @@ class RedirectParserTest {
 
     @Test
     fun samePrefixPath_isNotMistakenForSentinel() {
-        // A path that merely starts with the sentinel string must NOT match.
+        // sentinel 문자열로 시작하기만 하는 path는 매칭되면 안 된다.
         assertNull(RedirectParser.parse("${Bridge.SUCCESS_URL}-summary?paymentKey=pk"))
         assertNull(RedirectParser.parse("${Bridge.FAIL_URL}ure?code=X"))
     }

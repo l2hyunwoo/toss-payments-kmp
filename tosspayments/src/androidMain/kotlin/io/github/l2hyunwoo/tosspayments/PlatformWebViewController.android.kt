@@ -16,11 +16,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 /**
- * Android WebView host. Loads the bundled host HTML (which pulls in the v2 JS SDK), bridges
- * JS↔Kotlin over a @JavascriptInterface, intercepts the requestPayment redirect to the sentinel
- * success/fail URLs, and launches external bank/easy-pay apps via `intent://` / app-scheme URLs.
+ * Android WebView host. 번들된 host HTML(v2 JS SDK를 끌어옴)을 로드하고, @JavascriptInterface로
+ * JS↔Kotlin을 브리지하며, requestPayment의 sentinel success/fail URL로의 redirect를 가로채고,
+ * `intent://` / app-scheme URL로 외부 은행/간편결제 앱을 실행한다.
  *
- * All WebView operations run on the main thread; [scope] marshals any off-thread callback back.
+ * 모든 WebView 연산은 main thread에서 실행된다; [scope]가 off-thread 콜백을 다시 마샬링한다.
  */
 internal actual class PlatformWebViewController actual constructor(
     private val config: PaymentWidgetConfig,
@@ -42,7 +42,7 @@ internal actual class PlatformWebViewController actual constructor(
         this.onStatus = onStatus
         this.onPageReady = onPageReady
         onStatus(WidgetStatus.LOADING)
-        // The WebView itself is created by the Compose host (attach) which holds a Context.
+        // WebView 자체는 Context를 들고 있는 Compose host(attach)가 생성한다.
     }
 
     actual fun evaluate(js: String) {
@@ -63,16 +63,16 @@ internal actual class PlatformWebViewController actual constructor(
         pageReadyFired = false
     }
 
-    /** Builds, configures, and starts loading the WebView. Called from the AndroidView factory. */
+    /** WebView를 생성·설정하고 로딩을 시작한다. AndroidView factory에서 호출된다. */
     @SuppressLint("SetJavaScriptEnabled")
     internal fun attach(context: Context): WebView {
         val wv = WebView(context)
         webView = wv
         wv.settings.apply {
             javaScriptEnabled = true
-            domStorageEnabled = true // the JS SDK uses DOM storage
+            domStorageEnabled = true // JS SDK가 DOM storage를 사용한다
             javaScriptCanOpenWindowsAutomatically = true
-            setSupportMultipleWindows(true) // enables onCreateWindow for 3DS popups
+            setSupportMultipleWindows(true) // 3DS 팝업을 위해 onCreateWindow를 활성화한다
         }
         wv.addJavascriptInterface(JsBridge(), Bridge.NATIVE_CHANNEL)
         wv.webViewClient = TossWebViewClient()
@@ -80,8 +80,8 @@ internal actual class PlatformWebViewController actual constructor(
 
         scope.launch {
             val html = HtmlResource.load(config)
-            // baseURL must share the sentinel origin so the success/fail redirect is same-origin
-            // and reaches shouldOverrideUrlLoading.
+            // success/fail redirect가 same-origin이 되어 shouldOverrideUrlLoading에 도달하도록
+            // baseURL은 sentinel origin을 공유해야 한다.
             wv.loadDataWithBaseURL(Bridge.BASE_URL, html, "text/html", "utf-8", null)
         }
         return wv
@@ -91,7 +91,7 @@ internal actual class PlatformWebViewController actual constructor(
         scope.launch { onMessage?.invoke(json) }
     }
 
-    /** window.tossNative.postMessage(json) → here. */
+    /** window.tossNative.postMessage(json) → 여기로 온다. */
     private inner class JsBridge {
         @JavascriptInterface
         fun postMessage(json: String) = deliver(json)
@@ -110,7 +110,7 @@ internal actual class PlatformWebViewController actual constructor(
             request: WebResourceRequest,
             error: android.webkit.WebResourceError,
         ) {
-            // Only the main document failing (not a sub-resource) means the widget can't load.
+            // sub-resource가 아니라 main document가 실패한 경우에만 위젯을 로드할 수 없다.
             if (request.isForMainFrame) scope.launch { onStatus?.invoke(WidgetStatus.FAILED) }
         }
 
@@ -122,15 +122,15 @@ internal actual class PlatformWebViewController actual constructor(
             handleUrl(view, url)
     }
 
-    /** Returns true if the navigation was handled (and should be cancelled). */
+    /** navigation을 처리했으면(그리고 취소해야 하면) true를 반환한다. */
     private fun handleUrl(view: WebView, url: String): Boolean {
-        // requestPayment result: native parses the sentinel redirect into a GuestMessage.
+        // requestPayment 결과: native가 sentinel redirect를 GuestMessage로 파싱한다.
         RedirectParser.parse(url)?.let { msg ->
             deliver(Bridge.json.encodeToString(GuestMessage.serializer(), msg))
             return true
         }
         return when (Uri.parse(url).scheme?.lowercase()) {
-            "http", "https" -> false // let the WebView load it (widget UI, bank 3DS pages)
+            "http", "https" -> false // WebView가 로드하도록 둔다 (위젯 UI, 은행 3DS 페이지)
             "intent" -> { launchIntentScheme(view.context, url); true }
             null -> false
             else -> { launchAppScheme(view.context, url); true } // ispmobile, supertoss, kftc-bankpay, card apps…
@@ -142,7 +142,7 @@ internal actual class PlatformWebViewController actual constructor(
         try {
             context.startActivity(intent)
         } catch (_: ActivityNotFoundException) {
-            // App not installed → fall back to its Play Store page if the intent declares a package.
+            // 앱 미설치 → intent에 package가 선언돼 있으면 그 앱의 Play Store 페이지로 폴백한다.
             intent.`package`?.let { pkg ->
                 runCatching {
                     context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$pkg")))
@@ -156,10 +156,10 @@ internal actual class PlatformWebViewController actual constructor(
     }
 
     /**
-     * Hosts window.open()/target=_blank popups (some 3DS/easy-pay flows). WebKit requires a real
-     * WebView via the transport to deliver the popup's target URL; we use a throwaway child that
-     * captures its first navigation, routes it into the main view, and then destroys itself so it
-     * does not leak (the main view drives the rest of the flow).
+     * window.open()/target=_blank 팝업을 호스팅한다 (일부 3DS/간편결제 flow). WebKit은 팝업의
+     * target URL을 전달하려면 transport를 통해 실제 WebView를 요구한다; 첫 navigation을 캡처해
+     * main view로 라우팅한 뒤 누수되지 않도록 스스로 destroy하는 일회용 child를 사용한다
+     * (나머지 flow는 main view가 주도한다).
      */
     private inner class TossWebChromeClient : WebChromeClient() {
         @SuppressLint("SetJavaScriptEnabled")
@@ -184,8 +184,8 @@ internal actual class PlatformWebViewController actual constructor(
                 }
 
                 private fun routeAndDispose(child: WebView, url: String) {
-                    if (!handleUrl(view, url)) view.loadUrl(url) // app-scheme handled, else load in main
-                    child.destroy() // throwaway popup view — release it
+                    if (!handleUrl(view, url)) view.loadUrl(url) // app-scheme 처리됨, 아니면 main에서 로드
+                    child.destroy() // 일회용 팝업 view — 해제한다
                 }
             }
             (resultMsg.obj as? WebView.WebViewTransport)?.webView = child

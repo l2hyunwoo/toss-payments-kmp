@@ -24,14 +24,14 @@ import platform.WebKit.WKWindowFeatures
 import platform.darwin.NSObject
 
 /**
- * iOS WebView host — the decisive advantage of the self-hosted approach.
+ * iOS WebView host — self-hosted 방식의 결정적 이점.
  *
- * Toss's own iOS SDK is pure Swift with NO @objc, so Kotlin/Native cinterop cannot call it. This
- * implementation depends on NONE of it: WKWebView, WKWebViewConfiguration, WKUserContentController,
- * WKScriptMessageHandler, WKNavigationDelegate, WKUIDelegate are all consumed directly from the
- * platform.WebKit cinterop bindings, because WebKit IS an Obj-C framework. Zero Swift.
+ * Toss 자체 iOS SDK는 @objc가 전혀 없는 순수 Swift라 Kotlin/Native cinterop으로 호출할 수 없다.
+ * 이 구현은 그것에 전혀 의존하지 않는다: WKWebView, WKWebViewConfiguration, WKUserContentController,
+ * WKScriptMessageHandler, WKNavigationDelegate, WKUIDelegate 모두 platform.WebKit cinterop 바인딩에서
+ * 직접 가져온다 — WebKit 자체가 Obj-C 프레임워크이기 때문이다. Swift는 전혀 쓰지 않는다.
  *
- * All WKWebView operations are main-thread-only; [scope] is the main dispatcher.
+ * 모든 WKWebView 작업은 main thread 전용이며, [scope]가 main dispatcher다.
  */
 @OptIn(ExperimentalForeignApi::class)
 internal actual class PlatformWebViewController actual constructor(
@@ -47,9 +47,9 @@ internal actual class PlatformWebViewController actual constructor(
     private var onPageReady: (() -> Unit)? = null
     private var pageReadyFired = false
 
-    // RETENTION: WKWebView holds navigationDelegate/UIDelegate weakly, and addScriptMessageHandler's
-    // retain doesn't keep the Kotlin wrapper alive across the interop boundary. These MUST be strong
-    // Kotlin properties for the WebView's lifetime, or callbacks silently stop firing.
+    // RETENTION: WKWebView는 navigationDelegate/UIDelegate를 weak로 잡고, addScriptMessageHandler의
+    // retain은 interop 경계를 넘어 Kotlin wrapper를 살려두지 못한다. WebView 수명 동안 strong Kotlin
+    // 프로퍼티로 잡아둬야 하며, 그렇지 않으면 콜백이 조용히 안 불린다.
     private val messageHandler = MessageHandler { json -> deliver(json) }
     private val navDelegate = NavDelegate(
         onResult = { json -> deliver(json) },
@@ -67,7 +67,7 @@ internal actual class PlatformWebViewController actual constructor(
         this.onStatus = onStatus
         this.onPageReady = onPageReady
         onStatus(WidgetStatus.LOADING)
-        // The WKWebView is created lazily by the Compose host (ensureWebView) on the main thread.
+        // WKWebView는 Compose host(ensureWebView)가 main thread에서 lazy하게 생성한다.
     }
 
     actual fun evaluate(js: String) {
@@ -90,11 +90,11 @@ internal actual class PlatformWebViewController actual constructor(
         pageReadyFired = false
     }
 
-    /** Builds the WKWebView (main thread) and starts loading the host HTML. Called from UIKitView factory. */
+    /** WKWebView를 만들고(main thread) host HTML 로딩을 시작한다. UIKitView factory에서 호출한다. */
     internal fun ensureWebView(): WKWebView {
         webView?.let { return it }
         val configuration = WKWebViewConfiguration().apply {
-            // WKPreferences.javaScriptEnabled is deprecated on iOS; the modern switch is
+            // WKPreferences.javaScriptEnabled은 iOS에서 deprecated다. 최신 스위치는
             // defaultWebpagePreferences.allowsContentJavaScript.
             defaultWebpagePreferences.allowsContentJavaScript = true
             userContentController.addScriptMessageHandler(messageHandler, Bridge.NATIVE_CHANNEL)
@@ -115,7 +115,7 @@ internal actual class PlatformWebViewController actual constructor(
         scope.launch { onMessage?.invoke(json) }
     }
 
-    // ----- delegates (NSObject() first supertype, protocol second, no parens) -----
+    // ----- delegate들 (NSObject()를 첫 supertype으로, protocol을 두 번째로, 괄호 없이) -----
 
     private class MessageHandler(val onJson: (String) -> Unit) : NSObject(), WKScriptMessageHandlerProtocol {
         override fun userContentController(
@@ -133,7 +133,7 @@ internal actual class PlatformWebViewController actual constructor(
     ) : NSObject(), WKNavigationDelegateProtocol {
 
         override fun webView(webView: WKWebView, didFinishNavigation: WKNavigation?) {
-            // READY still comes from the JS 'ready' event; this only gates init/render evaluation.
+            // READY는 여전히 JS 'ready' 이벤트에서 온다. 여기서는 init/render evaluation만 gate한다.
             onReady()
         }
 
@@ -147,7 +147,7 @@ internal actual class PlatformWebViewController actual constructor(
             onLoadFailed()
         }
 
-        // Implement ONLY the 3-arg overload to avoid override ambiguity. Call decisionHandler once.
+        // override 모호성을 피하려고 3-arg overload만 구현한다. decisionHandler는 한 번만 호출한다.
         override fun webView(
             webView: WKWebView,
             decidePolicyForNavigationAction: WKNavigationAction,
@@ -155,8 +155,8 @@ internal actual class PlatformWebViewController actual constructor(
         ) {
             val url = decidePolicyForNavigationAction.request.URL
             val s = url?.absoluteString
-            // The redirect result is parsed ONCE; decisionHandler is invoked before any fallible
-            // delivery work so it can never be skipped (an un-called handler deadlocks WK navigation).
+            // redirect 결과는 한 번만 파싱한다. decisionHandler는 실패할 수 있는 delivery 작업보다
+            // 먼저 호출해 절대 건너뛰지 않게 한다(호출 안 된 handler는 WK navigation을 deadlock시킨다).
             val redirect = s?.let { RedirectParser.parse(it) }
             when {
                 s == null -> decisionHandler(WKNavigationActionPolicy.WKNavigationActionPolicyAllow)
@@ -168,7 +168,7 @@ internal actual class PlatformWebViewController actual constructor(
                     decisionHandler(WKNavigationActionPolicy.WKNavigationActionPolicyAllow)
                 }
                 else -> {
-                    // App-scheme (supertoss, ispmobile, kftc-bankpay, card apps…) → launch externally.
+                    // App-scheme(supertoss, ispmobile, kftc-bankpay, 카드 앱…) → 외부에서 실행.
                     decisionHandler(WKNavigationActionPolicy.WKNavigationActionPolicyCancel)
                     UIApplication.sharedApplication.openURL(url, emptyMap<Any?, Any?>(), null)
                 }
@@ -183,7 +183,7 @@ internal actual class PlatformWebViewController actual constructor(
             forNavigationAction: WKNavigationAction,
             windowFeatures: WKWindowFeatures,
         ): WKWebView? {
-            // Route window.open()/target=_blank into the same WebView so 3DS popups don't dead-end.
+            // window.open()/target=_blank를 같은 WebView로 보내 3DS 팝업이 막다른 길에 안 빠지게 한다.
             if (forNavigationAction.targetFrame == null) {
                 webView.loadRequest(forNavigationAction.request)
             }

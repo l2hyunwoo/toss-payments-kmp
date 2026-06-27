@@ -6,9 +6,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 
 /**
- * Surfaces the single Android WebView (built/configured by the controller) into the Compose tree.
- * The WebView renders both the payment-method selector and the agreement; its height is driven
- * by the JS SDK (the WebView wraps its content).
+ * controller가 만들고 설정한 단일 Android WebView를 Compose 트리에 올린다.
+ * 이 WebView는 결제수단 선택 UI와 약관 동의를 함께 렌더링하며, 높이는
+ * JS SDK가 결정한다(WebView가 콘텐츠를 wrap).
  */
 @Composable
 internal actual fun TossWidgetHost(widget: TossPaymentWidget, modifier: Modifier) {

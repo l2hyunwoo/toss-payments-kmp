@@ -9,13 +9,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 
 /**
- * Imperative handle to a payment widget instance, obtained from [rememberTossPaymentWidget]
- * and mounted by [TossPaymentWidgetSurface]. Drives the caller's pay button.
+ * 결제 위젯 인스턴스에 대한 명령형 핸들. [rememberTossPaymentWidget]로 얻고
+ * [TossPaymentWidgetSurface]가 mount한다. 호출자의 결제 버튼을 구동한다.
  *
- * Holds the [PlatformWebViewController] and owns the readiness/agreement/selection state
- * derived from inbound [GuestMessage]s. All state is observable as [StateFlow] so Compose
- * recomposes correctly; mutations are expected on the main thread (the controller marshals
- * platform callbacks there).
+ * [PlatformWebViewController]를 보유하고, 들어오는 [GuestMessage]에서 파생된
+ * readiness/agreement/selection 상태를 소유한다. 모든 상태는 [StateFlow]로 관찰 가능해
+ * Compose가 올바르게 recompose하며, 변경은 main thread에서 일어나야 한다(controller가
+ * platform 콜백을 그쪽으로 marshal한다).
  */
 @Stable
 class TossPaymentWidget internal constructor(
@@ -33,14 +33,14 @@ class TossPaymentWidget internal constructor(
     private val _selectedMethod = MutableStateFlow<SelectedPaymentMethod?>(null)
     val selectedMethod: StateFlow<SelectedPaymentMethod?> = _selectedMethod.asStateFlow()
 
-    /** JS-driven content height in px (0 until first render). The surface sizes itself to this. */
+    /** JS가 구동하는 콘텐츠 높이(px, 첫 render 전까지는 0). surface가 이 값에 맞춰 크기를 잡는다. */
     private val _heightPx = MutableStateFlow(0)
     val heightPx: StateFlow<Int> = _heightPx.asStateFlow()
 
-    /** Set while a requestPayment call is awaiting its result. */
+    /** requestPayment 호출이 결과를 기다리는 동안 설정된다. */
     private var pending: CompletableDeferred<PaymentResult>? = null
 
-    /** One-shot guard so the deprecated split shims don't double-mount the single WebView. */
+    /** deprecated split shim들이 단일 WebView를 이중으로 mount하지 않도록 하는 one-shot 가드. */
     private var primaryClaimed = false
 
     internal fun start() {
@@ -48,16 +48,16 @@ class TossPaymentWidget internal constructor(
             onMessage = { raw -> handleMessage(raw) },
             onStatus = { s -> _status.value = s },
             onPageReady = {
-                // The page (and the synchronous JS SDK script tag) is loaded; only now is the
-                // JS surface evaluate-able. Create the session, then render methods+agreement
-                // (the page folds the agreement into renderPaymentMethods — one JS session).
+                // 페이지(와 동기 JS SDK script 태그)가 로드됐다. 이제서야 JS surface를
+                // evaluate할 수 있다. 세션을 만든 뒤 methods+agreement를 render한다
+                // (페이지가 agreement를 renderPaymentMethods에 접어 넣는다 — 하나의 JS 세션).
                 controller.evaluate(HostCommand.Init(config).toJs())
                 controller.evaluate(HostCommand.RenderPaymentMethods(amount, renderOptions).toJs())
             },
         )
     }
 
-    /** Claimed by the first composable that mounts the surface; later shims become no-ops. */
+    /** surface를 mount하는 첫 composable이 claim한다. 이후 shim들은 no-op이 된다. */
     internal fun claimPrimarySurface(): Boolean {
         if (primaryClaimed) return false
         primaryClaimed = true
@@ -75,7 +75,7 @@ class TossPaymentWidget internal constructor(
         controller.dispose()
     }
 
-    /** Updates the rendered amount (e.g. after applying a coupon). Safe after [WidgetStatus.READY]. */
+    /** render된 금액을 갱신한다(예: coupon 적용 후). [WidgetStatus.READY] 이후 안전하다. */
     fun updateAmount(amount: PaymentAmount, description: String? = null) {
         controller.evaluate(HostCommand.UpdateAmount(amount, description).toJs())
     }
@@ -83,17 +83,17 @@ class TossPaymentWidget internal constructor(
     fun getSelectedPaymentMethod(): SelectedPaymentMethod? = _selectedMethod.value
 
     /**
-     * Triggers payment for the selected method. Suspends until the JS bridge resolves with a
-     * success or failure. Calling before the widget is [WidgetStatus.READY] fails fast with a
-     * [TossPaymentError.Configuration] rather than throwing — matching the SDK's async render gate.
+     * 선택된 method로 결제를 트리거한다. JS bridge가 성공 또는 실패로 resolve할 때까지
+     * suspend한다. 위젯이 [WidgetStatus.READY]가 되기 전에 호출하면 throw하지 않고
+     * [TossPaymentError.Configuration]으로 곧바로 실패한다 — SDK의 async render gate와 맞춘다.
      *
-     * NOTE: [PaymentResult.Success] is not a settled payment. Confirm server-side
-     * (paymentKey + orderId + amount → /v1/payments/confirm) before fulfilling.
+     * NOTE: [PaymentResult.Success]는 확정된 결제가 아니다. 이행 전에 server-side에서
+     * 확인하라(paymentKey + orderId + amount → /v1/payments/confirm).
      */
     suspend fun requestPayment(order: PaymentOrder): PaymentResult {
-        // All `pending` access is confined to the main dispatcher so it can't race with the
-        // result delivery (which arrives via the controller's main scope). The caller may invoke
-        // this from any context; we hop to Main for the mutation, then await off the critical section.
+        // `pending` 접근은 모두 main dispatcher에 가둬, 결과 전달(controller의 main scope로 도착)과
+        // race하지 않게 한다. 호출자는 어떤 context에서든 호출할 수 있다. 변경을 위해 Main으로
+        // 점프한 뒤 critical section 밖에서 await한다.
         val deferred = withContext(Dispatchers.Main.immediate) {
             when {
                 _status.value != WidgetStatus.READY -> failure(

@@ -1,19 +1,19 @@
 <!DOCTYPE html>
 <!--
-  Host page for the TossPayments v2 JS SDK (self-hosted WebView approach).
+  TossPayments v2 JS SDK 호스트 페이지 (self-hosted WebView 방식).
 
-  Native flow:
-    1. PlatformWebViewController loads this HTML (string) under baseURL https://tosspayments.local/.
-       Before loading, it replaces __TOSS_JS_SDK_URL__ with PaymentWidgetConfig.jsSdkUrl.
-    2. After the page loads (onPageFinished / didFinishNavigation), native calls
-       window.__toss.init(...) then window.__toss.renderPaymentMethods(...) via evaluate().
-    3. The page posts events back over a single channel (iOS WKScriptMessageHandler "tossNative",
-       else Android @JavascriptInterface "tossNative"). Event/payload names match Bridge.kt
-       (GuestEvent @SerialName + GuestPayload fields) verbatim.
-    4. requestPayment REDIRECTS to the sentinel successUrl/failUrl on completion — the Promise
-       does NOT resolve with a paymentKey on mobile. Native intercepts those navigations and
-       synthesizes paymentSuccess/paymentFail. JS only emits paymentFail for synchronous
-       validation / user-abort errors before any redirect.
+  Native 플로우:
+    1. PlatformWebViewController가 이 HTML(문자열)을 baseURL https://tosspayments.local/ 아래에서 로드한다.
+       로드 전에 __TOSS_JS_SDK_URL__ 을 PaymentWidgetConfig.jsSdkUrl 로 치환한다.
+    2. 페이지 로드 후(onPageFinished / didFinishNavigation), native가 evaluate()로
+       window.__toss.init(...) 다음 window.__toss.renderPaymentMethods(...) 를 호출한다.
+    3. 페이지는 단일 채널로 이벤트를 되돌려 보낸다(iOS는 WKScriptMessageHandler "tossNative",
+       그 외 Android는 @JavascriptInterface "tossNative"). event/payload 이름은 Bridge.kt
+       (GuestEvent @SerialName + GuestPayload 필드)와 글자 그대로 일치한다.
+    4. requestPayment는 완료 시 sentinel successUrl/failUrl 로 REDIRECT 한다 — 모바일에서는 Promise가
+       paymentKey로 resolve 되지 않는다. native가 그 navigation을 가로채
+       paymentSuccess/paymentFail 을 합성한다. JS는 redirect 이전의 동기 검증 /
+       사용자 취소 오류에 대해서만 paymentFail 을 emit 한다.
 -->
 <html lang="ko">
 <head>
@@ -31,14 +31,14 @@
 
   <script>
     (function () {
-      // Must mirror Bridge.SUCCESS_URL / Bridge.FAIL_URL.
+      // Bridge.SUCCESS_URL / Bridge.FAIL_URL 과 반드시 일치해야 한다.
       var SUCCESS_URL = "https://tosspayments.local/widget/success";
       var FAIL_URL = "https://tosspayments.local/widget/fail";
 
       var _widgets = null, _methodWidget = null, _agreementWidget = null, _ready = false;
 
-      // JS -> native. iOS exposes window.webkit.messageHandlers.tossNative; Android exposes
-      // window.tossNative (@JavascriptInterface). One page serves both hosts.
+      // JS -> native. iOS는 window.webkit.messageHandlers.tossNative 를, Android는
+      // window.tossNative (@JavascriptInterface) 를 노출한다. 한 페이지가 두 호스트를 모두 지원한다.
       function post(event, payload) {
         var msg = JSON.stringify({ event: event, payload: payload || null });
         try {
@@ -47,14 +47,14 @@
           } else if (window.tossNative && window.tossNative.postMessage) {
             window.tossNative.postMessage(msg);
           }
-        } catch (e) { /* no channel yet */ }
+        } catch (e) { /* 아직 채널 없음 */ }
       }
 
       function reportHeight() {
         post("height", { height: document.body.scrollHeight });
       }
 
-      // Defend against the selection callback being either a string enum code or an object.
+      // selection 콜백이 문자열 enum 코드일 수도, 객체일 수도 있으니 방어한다.
       function normalizeMethod(sel) {
         if (sel == null) return { methodType: null, method: null, easyPay: null };
         if (typeof sel === "string") return { methodType: sel, method: sel, easyPay: null };
@@ -67,7 +67,7 @@
 
       window.__toss = {
         init: function (args) {
-          var tp = TossPayments(args.clientKey); // global factory from /v2/standard, synchronous
+          var tp = TossPayments(args.clientKey); // /v2/standard 의 전역 factory, 동기
           if (args.brandPayRedirectUrl) {
             _widgets = tp.widgets({ customerKey: args.customerKey, brandpay: { redirectUrl: args.brandPayRedirectUrl } });
           } else {
@@ -75,7 +75,7 @@
           }
         },
 
-        // Renders BOTH the method selector and the agreement in one JS session.
+        // 한 JS 세션에서 결제수단 selector와 약관을 모두 렌더한다.
         renderPaymentMethods: function (args) {
           if (!_widgets) { post("failed", { code: "NOT_INITIALIZED", message: "init() was not called" }); return; }
           (async function () {
@@ -101,7 +101,7 @@
           })();
         },
 
-        // Agreement is folded into renderPaymentMethods; kept callable so older host code is safe.
+        // 약관은 renderPaymentMethods 에 통합됨; 구버전 호스트 코드 안전성을 위해 호출 가능하게 남겨둔다.
         renderAgreement: function () { /* no-op */ },
 
         updateAmount: function (args) {
@@ -116,15 +116,15 @@
               await _widgets.requestPayment({
                 orderId: args.orderId,
                 orderName: args.orderName,
-                successUrl: SUCCESS_URL, // native intercepts ?paymentKey&orderId&amount
-                failUrl: FAIL_URL,       // native intercepts ?code&message&orderId
+                successUrl: SUCCESS_URL, // native가 ?paymentKey&orderId&amount 를 가로챈다
+                failUrl: FAIL_URL,       // native가 ?code&message&orderId 를 가로챈다
                 customerEmail: args.customerEmail,
                 customerName: args.customerName,
                 customerMobilePhone: args.customerMobilePhone,
               });
-              // Success does NOT arrive here on mobile — it redirects to SUCCESS_URL.
+              // 모바일에서는 성공이 여기로 오지 않는다 — SUCCESS_URL 로 redirect 된다.
             } catch (e) {
-              // Synchronous validation / user-abort only.
+              // 동기 검증 / 사용자 취소만 해당.
               post("paymentFail", {
                 code: (e && e.code) || "UNKNOWN",
                 message: String(e && (e.message || e)),

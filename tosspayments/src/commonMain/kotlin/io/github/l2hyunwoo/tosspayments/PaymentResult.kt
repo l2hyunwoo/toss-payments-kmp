@@ -1,19 +1,19 @@
 package io.github.l2hyunwoo.tosspayments
 
 /**
- * Outcome of [TossPaymentWidget.requestPayment].
+ * [TossPaymentWidget.requestPayment]의 결과.
  *
- * IMPORTANT: [Success] is NOT proof the payment is settled. It only means the JS SDK
- * produced a paymentKey. The merchant server MUST call the TossPayments
- * `/v1/payments/confirm` API with paymentKey + orderId + amount before fulfilling the
- * order. The in-process result is advisory on every integration approach.
+ * 중요: [Success]는 결제가 완료되었다는 증거가 아니다. JS SDK가 paymentKey를
+ * 만들어냈다는 의미일 뿐이다. 가맹점 서버는 주문을 처리하기 전에 반드시
+ * paymentKey + orderId + amount로 TossPayments `/v1/payments/confirm` API를
+ * 호출해야 한다. in-process 결과는 어떤 연동 방식에서든 참고용일 뿐이다.
  */
 sealed interface PaymentResult {
     data class Success(
         val paymentKey: String,
         val orderId: String,
         val amount: Long,
-        /** Extra fields the JS SDK returns, e.g. additionalParameters["paymentType"] = "BRANDPAY". */
+        /** JS SDK가 반환하는 추가 필드. 예: additionalParameters["paymentType"] = "BRANDPAY". */
         val additionalParameters: Map<String, String> = emptyMap(),
     ) : PaymentResult
 
@@ -21,8 +21,8 @@ sealed interface PaymentResult {
 }
 
 /**
- * Readiness of the widget. The JS SDK renders asynchronously; calling requestPayment
- * before [READY] is rejected (the native SDKs throw — we surface it as a typed error /
- * a gate the caller can observe). Drive the pay button's enabled state from this.
+ * 위젯의 준비 상태. JS SDK는 비동기로 렌더링하므로, [READY] 이전에 requestPayment를
+ * 호출하면 거부된다(네이티브 SDK는 throw하고 — 우리는 이를 타입이 있는 에러 /
+ * 호출자가 관찰할 수 있는 게이트로 노출한다). 결제 버튼의 enabled 상태를 이 값으로 제어한다.
  */
 enum class WidgetStatus { LOADING, READY, FAILED }

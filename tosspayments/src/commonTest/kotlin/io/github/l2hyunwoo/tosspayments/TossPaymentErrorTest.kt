@@ -28,7 +28,7 @@ class TossPaymentErrorTest {
 
     @Test
     fun unknownAndPlatformInternalCodes_degradeToUnknown_retainingCode() {
-        // iOS-internal "102", documented "UNKNOWN", and any future code must not crash.
+        // iOS 내부 코드 "102", 문서화된 "UNKNOWN", 그리고 향후 추가될 코드 모두 크래시 없이 처리돼야 한다.
         val internal = TossPaymentError.from("102", "frame load interrupted")
         assertIs<TossPaymentError.Unknown>(internal)
         assertEquals("102", internal.code)
@@ -47,7 +47,7 @@ class TossPaymentErrorTest {
 
     @Test
     fun messageIsNotUsedForClassification() {
-        // Same code, different platform messages → same variant.
+        // 같은 코드라면 플랫폼별 메시지가 달라도 같은 variant여야 한다.
         val web = TossPaymentError.from("PAY_PROCESS_CANCELED", "사용자에 의해 결제가 취소되었습니다")
         val ios = TossPaymentError.from("PAY_PROCESS_CANCELED", "사용자가 결제를 취소하였습니다")
         assertTrue(web is TossPaymentError.UserCanceled && ios is TossPaymentError.UserCanceled)

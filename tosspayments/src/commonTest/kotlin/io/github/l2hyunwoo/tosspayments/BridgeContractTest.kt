@@ -30,7 +30,7 @@ class BridgeContractTest {
 
     @Test
     fun guestMessage_ignoresUnknownKeys() {
-        // The page may add fields we don't model; decoding must not throw.
+        // 페이지가 모델에 없는 필드를 추가할 수 있다. 디코딩이 예외를 던지면 안 된다.
         val raw = """{"event":"ready","payload":{"height":120.0,"futureField":"x"},"meta":123}"""
         val msg = Bridge.json.decodeFromString(GuestMessage.serializer(), raw)
         assertEquals(GuestEvent.READY, msg.event)
@@ -43,13 +43,13 @@ class BridgeContractTest {
             PaymentOrder(orderId = "order-1", orderName = "Tee \"L\""),
         ).toJs()
         assertTrue(js.startsWith("window.${Bridge.JS_NAMESPACE}.requestPayment("))
-        // The quote inside orderName must be JSON-escaped, not break the JS call.
+        // orderName 안의 따옴표는 JS 호출을 깨지 않도록 JSON-escape 되어야 한다.
         assertTrue(js.contains("""Tee \"L\""""), "orderName quote must be escaped: $js")
     }
 
     @Test
     fun hostCommand_requestPayment_injectsSentinelUrls() {
-        // requestPayment must carry the sentinel successUrl/failUrl the native host intercepts.
+        // requestPayment는 native host가 가로채는 sentinel successUrl/failUrl을 담아야 한다.
         val js = HostCommand.RequestPayment(PaymentOrder("order-1", "Tee")).toJs()
         assertTrue(js.contains("\"successUrl\":\"${Bridge.SUCCESS_URL}\""), js)
         assertTrue(js.contains("\"failUrl\":\"${Bridge.FAIL_URL}\""), js)
@@ -67,7 +67,7 @@ class BridgeContractTest {
 
     @Test
     fun hostCommand_updateAmount_carriesCurrency() {
-        // setAmount requires {currency, value} — currency must be serialized, not just value.
+        // setAmount는 {currency, value}를 요구한다 — value만이 아니라 currency도 직렬화되어야 한다.
         val js = HostCommand.UpdateAmount(
             PaymentAmount(value = 2000, currency = Currency.JPY),
             description = "coupon",
@@ -89,7 +89,7 @@ class BridgeContractTest {
 
     @Test
     fun hostCommand_render_omitsNullVariantKey() {
-        // explicitNulls=false → absent optional fields are dropped, not serialized as null.
+        // explicitNulls=false → 없는 optional 필드는 null로 직렬화되지 않고 제거된다.
         val js = HostCommand.RenderPaymentMethods(PaymentAmount(1000), RenderOptions()).toJs()
         assertTrue(!js.contains("variantKey"), "null variantKey should be omitted: $js")
     }

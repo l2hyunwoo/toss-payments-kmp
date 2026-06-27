@@ -3,11 +3,11 @@ package io.github.l2hyunwoo.tosspayments
 import toss_payments_kmp.tosspayments.generated.resources.Res
 
 /**
- * Loads the bundled host page (toss_widget.html) and injects the configured JS SDK URL.
+ * 번들된 host 페이지(toss_widget.html)를 로드하고 설정된 JS SDK URL을 주입한다.
  *
- * The HTML ships as a Compose Multiplatform resource (commonMain/composeResources/files), so a
- * single copy serves every target. [Res.readBytes] is suspend, hence this is suspend; each
- * platform host calls it from its main-bound coroutine before loading the WebView.
+ * HTML은 Compose Multiplatform 리소스(commonMain/composeResources/files)로 제공되므로 하나의
+ * 사본으로 모든 타깃에 대응한다. [Res.readBytes]가 suspend라 이 함수도 suspend다. 각 플랫폼
+ * host는 WebView를 로드하기 전에 main-bound 코루틴에서 이를 호출한다.
  */
 internal object HtmlResource {
     private const val PATH = "files/toss_widget.html"
