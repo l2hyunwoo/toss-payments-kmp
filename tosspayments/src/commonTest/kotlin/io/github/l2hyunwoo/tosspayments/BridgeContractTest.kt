@@ -48,6 +48,35 @@ class BridgeContractTest {
     }
 
     @Test
+    fun hostCommand_requestPayment_injectsSentinelUrls() {
+        // requestPayment must carry the sentinel successUrl/failUrl the native host intercepts.
+        val js = HostCommand.RequestPayment(PaymentOrder("order-1", "Tee")).toJs()
+        assertTrue(js.contains("\"successUrl\":\"${Bridge.SUCCESS_URL}\""), js)
+        assertTrue(js.contains("\"failUrl\":\"${Bridge.FAIL_URL}\""), js)
+    }
+
+    @Test
+    fun hostCommand_init_buildsInitCall() {
+        val js = HostCommand.Init(
+            PaymentWidgetConfig(ClientKey("test_ck_x"), CustomerKey.ANONYMOUS),
+        ).toJs()
+        assertTrue(js.startsWith("window.${Bridge.JS_NAMESPACE}.init("), js)
+        assertTrue(js.contains("\"clientKey\":\"test_ck_x\""), js)
+        assertTrue(js.contains("\"customerKey\":\"ANONYMOUS\""), js)
+    }
+
+    @Test
+    fun hostCommand_updateAmount_carriesCurrency() {
+        // setAmount requires {currency, value} — currency must be serialized, not just value.
+        val js = HostCommand.UpdateAmount(
+            PaymentAmount(value = 2000, currency = Currency.JPY),
+            description = "coupon",
+        ).toJs()
+        assertTrue(js.contains("\"value\":2000"), js)
+        assertTrue(js.contains("\"currency\":\"JPY\""), js)
+    }
+
+    @Test
     fun hostCommand_render_encodesAmountAndCurrency() {
         val js = HostCommand.RenderPaymentMethods(
             PaymentAmount(value = 1500, currency = Currency.USD, country = "US"),
