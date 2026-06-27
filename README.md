@@ -77,5 +77,11 @@ authoritative.
 
 ## Status
 
-Design + scaffold. The WebView/JS wiring (host page ↔ JS SDK, redirect/app-scheme handling,
-3DS popups, JS-driven height) is stubbed and lands in milestone 2.
+The WebView/JS wiring is implemented on both platforms: the host page loads the v2 JS SDK and
+drives `setAmount`/`renderPaymentMethods`/`renderAgreement`/`requestPayment`; the native hosts
+bridge JS↔Kotlin, intercept the requestPayment redirect (success/fail sentinel URLs) to deliver
+the result, launch external bank/easy-pay apps (`intent://` / app-scheme), and host 3DS popups.
+iOS uses pure Kotlin/Native over WebKit — no Swift.
+
+Not yet done: verification on physical devices against live Korean bank apps (the redirect /
+app-scheme / 3DS-popup paths cannot be exercised on emulators or with test cards), and publishing.
