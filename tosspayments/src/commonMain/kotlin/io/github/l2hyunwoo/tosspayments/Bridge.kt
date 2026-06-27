@@ -29,6 +29,26 @@ internal object Bridge {
 
     /** Name the native side registers its inbound channel under. */
     const val NATIVE_CHANNEL: String = "tossNative"
+
+    /**
+     * Sentinel origin the host HTML is loaded under (baseURL). It MUST match the origin of
+     * [SUCCESS_URL] / [FAIL_URL] so the redirect navigation stays same-origin and reaches the
+     * platform interceptor (Android shouldOverrideUrlLoading / iOS decidePolicyForNavigationAction).
+     * The page is never actually fetched from this host — it is loaded from an in-memory string.
+     */
+    const val BASE_URL: String = "https://tosspayments.local/"
+
+    /**
+     * requestPayment redirects here on success (the Promise path is unavailable on mobile).
+     * The native host cancels the load and parses paymentKey/orderId/amount from the query.
+     */
+    const val SUCCESS_URL: String = "https://tosspayments.local/widget/success"
+
+    /** requestPayment redirects here on failure; native parses code/message/orderId from the query. */
+    const val FAIL_URL: String = "https://tosspayments.local/widget/fail"
+
+    /** Placeholder in the bundled HTML; native replaces it with [PaymentWidgetConfig.jsSdkUrl]. */
+    const val JS_SDK_URL_TOKEN: String = "__TOSS_JS_SDK_URL__"
 }
 
 // ----- JS → Kotlin -----
@@ -57,10 +77,16 @@ internal enum class GuestEvent {
     /** Selected payment method changed. */
     @SerialName("methodChange") METHOD_CHANGE,
 
-    /** requestPayment resolved successfully. */
+    /**
+     * Payment succeeded. Produced NATIVE-SIDE by intercepting the redirect to [Bridge.SUCCESS_URL]
+     * (not by JS — the requestPayment Promise does not resolve with a paymentKey on mobile).
+     */
     @SerialName("paymentSuccess") PAYMENT_SUCCESS,
 
-    /** requestPayment rejected. */
+    /**
+     * Payment failed. Produced native-side from a redirect to [Bridge.FAIL_URL], OR by JS for a
+     * synchronous validation / user-abort error before any redirect happens.
+     */
     @SerialName("paymentFail") PAYMENT_FAIL,
 }
 
@@ -83,6 +109,83 @@ internal data class GuestPayload(
     val code: String? = null,
     val message: String? = null,
 )
+
+/**
+ * Parses a requestPayment redirect (to [Bridge.SUCCESS_URL] / [Bridge.FAIL_URL]) into a
+ * [GuestMessage], shared by both platform interceptors so the query-parsing logic is written
+ * and tested once. Returns null if the URL is not one of our sentinels.
+ *
+ * Hand-rolled query parsing avoids pulling a URL library into commonMain and works identically
+ * on every target. Values are percent-decoded.
+ */
+internal object RedirectParser {
+    fun parse(url: String): GuestMessage? {
+        val isSuccess = matchesSentinel(url, Bridge.SUCCESS_URL)
+        val isFail = matchesSentinel(url, Bridge.FAIL_URL)
+        if (!isSuccess && !isFail) return null
+
+        val query = url.substringAfter('?', missingDelimiterValue = "")
+        val params = parseQuery(query)
+        return if (isSuccess) {
+            GuestMessage(
+                event = GuestEvent.PAYMENT_SUCCESS,
+                payload = GuestPayload(
+                    paymentKey = params["paymentKey"],
+                    orderId = params["orderId"],
+                    amount = params["amount"]?.toLongOrNull(),
+                ),
+            )
+        } else {
+            GuestMessage(
+                event = GuestEvent.PAYMENT_FAIL,
+                payload = GuestPayload(
+                    code = params["code"] ?: "UNKNOWN",
+                    message = params["message"].orEmpty(),
+                    orderId = params["orderId"],
+                ),
+            )
+        }
+    }
+
+    /** Exact-path match: the sentinel must be followed by end-of-string, '?', or '#' — not an
+     *  arbitrary same-prefix path like `.../success-summary`. */
+    private fun matchesSentinel(url: String, sentinel: String): Boolean {
+        if (!url.startsWith(sentinel)) return false
+        val next = url.getOrNull(sentinel.length) ?: return true
+        return next == '?' || next == '#'
+    }
+
+    private fun parseQuery(query: String): Map<String, String> =
+        query.split('&')
+            .filter { it.isNotEmpty() }
+            .mapNotNull { pair ->
+                val i = pair.indexOf('=')
+                if (i < 0) null else decode(pair.substring(0, i)) to decode(pair.substring(i + 1))
+            }
+            .toMap()
+
+    /**
+     * Percent-decode (+ → space, %XX → byte). Accumulates raw bytes so multi-byte UTF-8 sequences
+     * (e.g. Korean) decode correctly — appending each %XX byte as a Char would mangle them.
+     */
+    private fun decode(s: String): String {
+        if ('%' !in s && '+' !in s) return s
+        val bytes = ArrayList<Byte>(s.length)
+        var i = 0
+        while (i < s.length) {
+            val c = s[i]
+            when {
+                c == '+' -> { bytes.add(' '.code.toByte()); i++ }
+                c == '%' && i + 3 <= s.length -> {
+                    val hex = s.substring(i + 1, i + 3).toIntOrNull(16)
+                    if (hex != null) { bytes.add(hex.toByte()); i += 3 } else { bytes.add(c.code.toByte()); i++ }
+                }
+                else -> { bytes.add(c.code.toByte()); i++ }
+            }
+        }
+        return bytes.toByteArray().decodeToString()
+    }
+}
 
 // ----- Kotlin → JS -----
 
@@ -119,9 +222,10 @@ internal sealed interface HostCommand {
 
     data class UpdateAmount(val amount: PaymentAmount, val description: String?) : HostCommand {
         override fun toJs(): String {
+            // setAmount requires {currency, value} — currency must be carried, not just the value.
             val args = Bridge.json.encodeToString(
                 UpdateAmountArgs.serializer(),
-                UpdateAmountArgs(amount.value, description),
+                UpdateAmountArgs(amount.value, amount.currency.name, description),
             )
             return "window.${Bridge.JS_NAMESPACE}.updateAmount($args)"
         }
@@ -129,11 +233,18 @@ internal sealed interface HostCommand {
 
     data class RequestPayment(val order: PaymentOrder) : HostCommand {
         override fun toJs(): String {
+            // successUrl/failUrl are the sentinels the native host intercepts; orderId/orderName
+            // plus optional customer fields are the verified v2 widget requestPayment params.
             val args = Bridge.json.encodeToString(
                 RequestPaymentArgs.serializer(),
                 RequestPaymentArgs(
-                    order.orderId, order.orderName, order.customerEmail,
-                    order.customerName, order.taxFreeAmount,
+                    orderId = order.orderId,
+                    orderName = order.orderName,
+                    successUrl = Bridge.SUCCESS_URL,
+                    failUrl = Bridge.FAIL_URL,
+                    customerEmail = order.customerEmail,
+                    customerName = order.customerName,
+                    customerMobilePhone = order.customerMobilePhone,
                 ),
             )
             return "window.${Bridge.JS_NAMESPACE}.requestPayment($args)"
@@ -159,6 +270,7 @@ private data class RenderArgs(
 @Serializable
 private data class UpdateAmountArgs(
     val value: Long,
+    val currency: String,
     val description: String? = null,
 )
 
@@ -166,7 +278,9 @@ private data class UpdateAmountArgs(
 private data class RequestPaymentArgs(
     val orderId: String,
     val orderName: String,
+    val successUrl: String,
+    val failUrl: String,
     val customerEmail: String? = null,
     val customerName: String? = null,
-    val taxFreeAmount: Long? = null,
+    val customerMobilePhone: String? = null,
 )

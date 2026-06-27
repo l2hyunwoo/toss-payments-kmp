@@ -18,10 +18,23 @@ package io.github.l2hyunwoo.tosspayments
 internal expect class PlatformWebViewController(config: PaymentWidgetConfig) {
 
     /**
-     * Begin loading the host page. [onMessage] receives raw JSON the page posts back;
-     * [onStatus] receives readiness transitions. Idempotent — calling twice is a no-op.
+     * Begin loading the host page.
+     *
+     * @param onMessage receives raw JSON the page posts back (decoded via [Bridge] into a
+     *   [GuestMessage]); also receives native-synthesized success/fail from redirect interception.
+     * @param onStatus receives readiness transitions.
+     * @param onPageReady fired once the page (and its inline script) finishes loading
+     *   (Android `onPageFinished` / iOS `didFinishNavigation`). The JS SDK is `evaluate`-able only
+     *   after this — the controller defers init/render commands until it fires.
+     *
+     * Called once per widget lifecycle (from [TossPaymentWidget.start] via the composable's
+     * DisposableEffect); the platform WebView itself is created lazily by the Compose host.
      */
-    fun mount(onMessage: (String) -> Unit, onStatus: (WidgetStatus) -> Unit)
+    fun mount(
+        onMessage: (String) -> Unit,
+        onStatus: (WidgetStatus) -> Unit,
+        onPageReady: () -> Unit,
+    )
 
     /** Kotlin → JS. Safe to call only after the page is loaded; no-op before mount. */
     fun evaluate(js: String)

@@ -2,20 +2,24 @@
 <!--
   Host page for the TossPayments v2 JS SDK (self-hosted WebView approach).
 
-  This is the analog of Toss's own bundled tosspayment_widget.html. The native
-  PlatformWebViewController loads this file, then drives it through window.__toss.*; the
-  page posts events back over window.tossNative (Android @JavascriptInterface /
-  iOS WKScriptMessageHandler).
-
-  STUB (milestone 2): the JS SDK script tag is injected by native using the pinned
-  config.jsSdkUrl, and the window.__toss functions below get their real implementations
-  (TossPayments(clientKey).widgets({customerKey}) → renderPaymentMethods / renderAgreement /
-  requestPayment / updateAmount), height reporting, and the readiness 'ready' event.
+  Native flow:
+    1. PlatformWebViewController loads this HTML (string) under baseURL https://tosspayments.local/.
+       Before loading, it replaces __TOSS_JS_SDK_URL__ with PaymentWidgetConfig.jsSdkUrl.
+    2. After the page loads (onPageFinished / didFinishNavigation), native calls
+       window.__toss.init(...) then window.__toss.renderPaymentMethods(...) via evaluate().
+    3. The page posts events back over a single channel (iOS WKScriptMessageHandler "tossNative",
+       else Android @JavascriptInterface "tossNative"). Event/payload names match Bridge.kt
+       (GuestEvent @SerialName + GuestPayload fields) verbatim.
+    4. requestPayment REDIRECTS to the sentinel successUrl/failUrl on completion — the Promise
+       does NOT resolve with a paymentKey on mobile. Native intercepts those navigations and
+       synthesizes paymentSuccess/paymentFail. JS only emits paymentFail for synchronous
+       validation / user-abort errors before any redirect.
 -->
 <html lang="ko">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <script src="__TOSS_JS_SDK_URL__"></script>
   <style>
     html, body { margin: 0; padding: 0; }
     #payment-method, #agreement { width: 100%; }
@@ -26,23 +30,111 @@
   <div id="agreement"></div>
 
   <script>
-    // Minimal bridge stub. Native posts JSON-encoded GuestMessage objects back here.
-    function post(event, payload) {
-      var msg = JSON.stringify({ event: event, payload: payload || null });
-      if (window.tossNative && window.tossNative.postMessage) {
-        window.tossNative.postMessage(msg);              // Android & iOS (WKScriptMessageHandler)
-      }
-    }
+    (function () {
+      // Must mirror Bridge.SUCCESS_URL / Bridge.FAIL_URL.
+      var SUCCESS_URL = "https://tosspayments.local/widget/success";
+      var FAIL_URL = "https://tosspayments.local/widget/fail";
 
-    // window.__toss is the Kotlin → JS command surface (see Bridge.HostCommand).
-    // These are placeholders; milestone 2 wires them to the real JS SDK.
-    window.__toss = {
-      init: function (args) { /* TossPayments(args.clientKey).widgets({ customerKey: args.customerKey }) */ },
-      renderPaymentMethods: function (args) { /* widgets.setAmount + renderPaymentMethods('#payment-method', ...) */ },
-      renderAgreement: function () { /* widgets.renderAgreement('#agreement') */ },
-      updateAmount: function (args) { /* widgets.setAmount({ value: args.value, currency, country }) */ },
-      requestPayment: function (args) { /* widgets.requestPayment({ orderId, orderName, ... }) → post('paymentSuccess'|'paymentFail', ...) */ },
-    };
+      var _widgets = null, _methodWidget = null, _agreementWidget = null, _ready = false;
+
+      // JS -> native. iOS exposes window.webkit.messageHandlers.tossNative; Android exposes
+      // window.tossNative (@JavascriptInterface). One page serves both hosts.
+      function post(event, payload) {
+        var msg = JSON.stringify({ event: event, payload: payload || null });
+        try {
+          if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.tossNative) {
+            window.webkit.messageHandlers.tossNative.postMessage(msg);
+          } else if (window.tossNative && window.tossNative.postMessage) {
+            window.tossNative.postMessage(msg);
+          }
+        } catch (e) { /* no channel yet */ }
+      }
+
+      function reportHeight() {
+        post("height", { height: document.body.scrollHeight });
+      }
+
+      // Defend against the selection callback being either a string enum code or an object.
+      function normalizeMethod(sel) {
+        if (sel == null) return { methodType: null, method: null, easyPay: null };
+        if (typeof sel === "string") return { methodType: sel, method: sel, easyPay: null };
+        return {
+          methodType: sel.type || sel.method || null,
+          method: sel.method || null,
+          easyPay: sel.easyPayProvider || sel.easyPay || null,
+        };
+      }
+
+      window.__toss = {
+        init: function (args) {
+          var tp = TossPayments(args.clientKey); // global factory from /v2/standard, synchronous
+          if (args.brandPayRedirectUrl) {
+            _widgets = tp.widgets({ customerKey: args.customerKey, brandpay: { redirectUrl: args.brandPayRedirectUrl } });
+          } else {
+            _widgets = tp.widgets({ customerKey: args.customerKey });
+          }
+        },
+
+        // Renders BOTH the method selector and the agreement in one JS session.
+        renderPaymentMethods: function (args) {
+          if (!_widgets) { post("failed", { code: "NOT_INITIALIZED", message: "init() was not called" }); return; }
+          (async function () {
+            try {
+              await _widgets.setAmount({ currency: args.currency, value: args.value });
+              var rendered = await Promise.all([
+                _widgets.renderPaymentMethods({ selector: "#payment-method", variantKey: args.variantKey || "DEFAULT" }),
+                _widgets.renderAgreement({ selector: "#agreement", variantKey: "AGREEMENT" }),
+              ]);
+              _methodWidget = rendered[0];
+              _agreementWidget = rendered[1];
+              _methodWidget.on("paymentMethodSelect", function (sel) { post("methodChange", normalizeMethod(sel)); });
+              _agreementWidget.on("agreementStatusChange", function (st) {
+                post("agreement", { agreedRequiredTerms: !!(st && st.agreedRequiredTerms) });
+              });
+              _ready = true;
+              post("ready");
+              reportHeight();
+              if (window.ResizeObserver) { new ResizeObserver(reportHeight).observe(document.body); }
+            } catch (e) {
+              post("failed", { code: (e && e.code) || "RENDER_FAILED", message: String(e && (e.message || e)) });
+            }
+          })();
+        },
+
+        // Agreement is folded into renderPaymentMethods; kept callable so older host code is safe.
+        renderAgreement: function () { /* no-op */ },
+
+        updateAmount: function (args) {
+          if (!_widgets) return;
+          _widgets.setAmount({ currency: args.currency || "KRW", value: args.value }).then(reportHeight);
+        },
+
+        requestPayment: function (args) {
+          if (!_widgets) { post("paymentFail", { code: "NOT_INITIALIZED", message: "init() was not called", orderId: args && args.orderId }); return; }
+          (async function () {
+            try {
+              await _widgets.requestPayment({
+                orderId: args.orderId,
+                orderName: args.orderName,
+                successUrl: SUCCESS_URL, // native intercepts ?paymentKey&orderId&amount
+                failUrl: FAIL_URL,       // native intercepts ?code&message&orderId
+                customerEmail: args.customerEmail,
+                customerName: args.customerName,
+                customerMobilePhone: args.customerMobilePhone,
+              });
+              // Success does NOT arrive here on mobile — it redirects to SUCCESS_URL.
+            } catch (e) {
+              // Synchronous validation / user-abort only.
+              post("paymentFail", {
+                code: (e && e.code) || "UNKNOWN",
+                message: String(e && (e.message || e)),
+                orderId: args.orderId,
+              });
+            }
+          })();
+        },
+      };
+    })();
   </script>
 </body>
 </html>

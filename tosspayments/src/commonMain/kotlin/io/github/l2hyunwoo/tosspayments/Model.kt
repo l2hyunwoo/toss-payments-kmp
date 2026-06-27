@@ -47,7 +47,7 @@ data class PaymentOrder(
     val orderName: String,
     val customerEmail: String? = null,
     val customerName: String? = null,
-    val taxFreeAmount: Long? = null,
+    val customerMobilePhone: String? = null,
 )
 
 /** Options applied when rendering the payment-method widget. */

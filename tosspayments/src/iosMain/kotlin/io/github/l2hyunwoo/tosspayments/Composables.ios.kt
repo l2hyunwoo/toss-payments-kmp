@@ -1,26 +1,30 @@
 package io.github.l2hyunwoo.tosspayments
 
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.viewinterop.UIKitInteropInteractionMode
+import androidx.compose.ui.viewinterop.UIKitInteropProperties
 import androidx.compose.ui.viewinterop.UIKitView
-import platform.WebKit.WKWebView
+import kotlinx.cinterop.ExperimentalForeignApi
 
 /**
- * Surfaces the iOS WKWebView region for [slot] into the Compose tree via [UIKitView]
- * (the official Compose Multiplatform UIKit-interop composable).
+ * Surfaces the single iOS WKWebView (built/configured by the controller) into the Compose tree via
+ * the new [UIKitView] interop (CMP 1.11, generic over UIView). The WebView renders both the
+ * payment-method selector and the agreement.
  *
- * STUB: returns an empty WKWebView for now. Milestone 2 will route each [slot] to its inline
- * region under one controller and apply the JS-driven height.
+ * NonCooperative interaction mode is required, or Compose would eat the WebView's scroll/tap gestures.
  */
-@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+@OptIn(ExperimentalForeignApi::class, ExperimentalComposeUiApi::class)
 @Composable
-internal actual fun TossWidgetSurface(
-    widget: TossPaymentWidget,
-    slot: TossWidgetSlot,
-    modifier: Modifier,
-) {
+internal actual fun TossWidgetHost(widget: TossPaymentWidget, modifier: Modifier) {
     UIKitView(
-        modifier = modifier,
-        factory = { WKWebView() },
+        factory = { widget.controller.ensureWebView() },
+        modifier = modifier.fillMaxWidth(),
+        properties = UIKitInteropProperties(
+            interactionMode = UIKitInteropInteractionMode.NonCooperative,
+            isNativeAccessibilityEnabled = true,
+        ),
     )
 }

@@ -6,20 +6,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 
 /**
- * Surfaces the Android WebView region for [slot] into the Compose tree via [AndroidView].
- *
- * STUB: returns an empty WebView for now. Milestone 2 will route each [slot] to its inline
- * region (Toss uses two WebView-backed FrameLayouts — payment-method + agreement — under one
- * controller) and apply the JS-driven height.
+ * Surfaces the single Android WebView (built/configured by the controller) into the Compose tree.
+ * The WebView renders both the payment-method selector and the agreement; its height is driven
+ * by the JS SDK (the WebView wraps its content).
  */
 @Composable
-internal actual fun TossWidgetSurface(
-    widget: TossPaymentWidget,
-    slot: TossWidgetSlot,
-    modifier: Modifier,
-) {
+internal actual fun TossWidgetHost(widget: TossPaymentWidget, modifier: Modifier) {
     AndroidView(
         modifier = modifier.fillMaxWidth(),
-        factory = { context -> android.webkit.WebView(context) },
+        factory = { context -> widget.controller.attach(context) },
     )
 }

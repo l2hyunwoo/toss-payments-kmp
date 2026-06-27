@@ -2,13 +2,15 @@ package io.github.l2hyunwoo.tosspayments
 
 import androidx.compose.runtime.Stable
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.withContext
 
 /**
  * Imperative handle to a payment widget instance, obtained from [rememberTossPaymentWidget]
- * and shared between [TossPaymentMethods], [TossPaymentAgreement], and the caller's pay button.
+ * and mounted by [TossPaymentWidgetSurface]. Drives the caller's pay button.
  *
  * Holds the [PlatformWebViewController] and owns the readiness/agreement/selection state
  * derived from inbound [GuestMessage]s. All state is observable as [StateFlow] so Compose
@@ -17,7 +19,8 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 @Stable
 class TossPaymentWidget internal constructor(
-    private val controller: PlatformWebViewController,
+    internal val controller: PlatformWebViewController,
+    private val config: PaymentWidgetConfig,
     private val amount: PaymentAmount,
     private val renderOptions: RenderOptions,
 ) {
@@ -30,16 +33,35 @@ class TossPaymentWidget internal constructor(
     private val _selectedMethod = MutableStateFlow<SelectedPaymentMethod?>(null)
     val selectedMethod: StateFlow<SelectedPaymentMethod?> = _selectedMethod.asStateFlow()
 
-    /** Set while a requestPayment call is awaiting its bridge resolution. */
+    /** JS-driven content height in px (0 until first render). The surface sizes itself to this. */
+    private val _heightPx = MutableStateFlow(0)
+    val heightPx: StateFlow<Int> = _heightPx.asStateFlow()
+
+    /** Set while a requestPayment call is awaiting its result. */
     private var pending: CompletableDeferred<PaymentResult>? = null
+
+    /** One-shot guard so the deprecated split shims don't double-mount the single WebView. */
+    private var primaryClaimed = false
 
     internal fun start() {
         controller.mount(
             onMessage = { raw -> handleMessage(raw) },
             onStatus = { s -> _status.value = s },
+            onPageReady = {
+                // The page (and the synchronous JS SDK script tag) is loaded; only now is the
+                // JS surface evaluate-able. Create the session, then render methods+agreement
+                // (the page folds the agreement into renderPaymentMethods — one JS session).
+                controller.evaluate(HostCommand.Init(config).toJs())
+                controller.evaluate(HostCommand.RenderPaymentMethods(amount, renderOptions).toJs())
+            },
         )
-        controller.evaluate(HostCommand.RenderPaymentMethods(amount, renderOptions).toJs())
-        controller.evaluate(HostCommand.RenderAgreement.toJs())
+    }
+
+    /** Claimed by the first composable that mounts the surface; later shims become no-ops. */
+    internal fun claimPrimarySurface(): Boolean {
+        if (primaryClaimed) return false
+        primaryClaimed = true
+        return true
     }
 
     internal fun dispose() {
@@ -49,6 +71,7 @@ class TossPaymentWidget internal constructor(
             ),
         )
         pending = null
+        primaryClaimed = false
         controller.dispose()
     }
 
@@ -68,29 +91,32 @@ class TossPaymentWidget internal constructor(
      * (paymentKey + orderId + amount → /v1/payments/confirm) before fulfilling.
      */
     suspend fun requestPayment(order: PaymentOrder): PaymentResult {
-        if (_status.value != WidgetStatus.READY) {
-            return PaymentResult.Failure(
-                TossPaymentError.Configuration(
-                    "NO_ACTIVE_PAYMENT_REQUEST",
+        // All `pending` access is confined to the main dispatcher so it can't race with the
+        // result delivery (which arrives via the controller's main scope). The caller may invoke
+        // this from any context; we hop to Main for the mutation, then await off the critical section.
+        val deferred = withContext(Dispatchers.Main.immediate) {
+            when {
+                _status.value != WidgetStatus.READY -> failure(
                     "Widget is not ready (status=${_status.value}); render must finish before requestPayment.",
                     order.orderId,
-                ),
-            )
-        }
-        pending?.takeIf { !it.isCompleted }?.let {
-            return PaymentResult.Failure(
-                TossPaymentError.Configuration(
-                    "NO_ACTIVE_PAYMENT_REQUEST",
+                )
+                pending?.takeIf { !it.isCompleted } != null -> failure(
                     "A payment request is already in progress.",
                     order.orderId,
-                ),
-            )
+                )
+                else -> CompletableDeferred<PaymentResult>().also {
+                    pending = it
+                    controller.evaluate(HostCommand.RequestPayment(order).toJs())
+                }
+            }
         }
-        val deferred = CompletableDeferred<PaymentResult>()
-        pending = deferred
-        controller.evaluate(HostCommand.RequestPayment(order).toJs())
         return deferred.await()
     }
+
+    private fun failure(message: String, orderId: String?): CompletableDeferred<PaymentResult> =
+        CompletableDeferred(
+            PaymentResult.Failure(TossPaymentError.Configuration("NO_ACTIVE_PAYMENT_REQUEST", message, orderId)),
+        )
 
     private fun handleMessage(raw: String) {
         val msg = runCatching { Bridge.json.decodeFromString(GuestMessage.serializer(), raw) }.getOrNull()
@@ -99,7 +125,7 @@ class TossPaymentWidget internal constructor(
         when (msg.event) {
             GuestEvent.READY -> _status.value = WidgetStatus.READY
             GuestEvent.FAILED -> _status.value = WidgetStatus.FAILED
-            GuestEvent.HEIGHT -> { /* height is consumed by the platform host for resizing */ }
+            GuestEvent.HEIGHT -> p?.height?.let { _heightPx.value = it.toInt() }
             GuestEvent.AGREEMENT -> _agreedRequiredTerms.value = p?.agreedRequiredTerms ?: false
             GuestEvent.METHOD_CHANGE -> _selectedMethod.value = p?.methodType?.let {
                 SelectedPaymentMethod(it, p.method ?: it, p.easyPay)
